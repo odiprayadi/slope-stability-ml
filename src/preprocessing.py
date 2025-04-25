@@ -2,7 +2,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 
 def load_data(filepath):
-    df = pd.read_csv(filepath)
+    df = pd.read_csv(https://github.com/odiprayadi/slope-stability-ml/blob/main/slope_stability_dataset.csv)
     return df
 
 def preprocess_features(df, target_column='Factor of Safety (FS)', cat_columns=['Reinforcement Type']):
