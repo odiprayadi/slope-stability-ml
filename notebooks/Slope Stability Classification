@@ -1,0 +1,195 @@
+# Ignore warning messages that are not important
+import warnings
+warnings.filterwarnings('ignore')
+
+# Import libraries (tools) we need
+import numpy as np  # For math and numbers
+import pandas as pd  # For working with data tables
+import matplotlib.pyplot as plt  # For charts
+import seaborn as sns  # For better-looking charts
+
+# Import machine learning tools
+from sklearn.model_selection import train_test_split  # To split data into train and test
+from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier  # Tree models
+from sklearn.metrics import r2_score, mean_absolute_error, confusion_matrix, classification_report  # To check performance
+from sklearn.inspection import permutation_importance  # To see which features are important
+from sklearn.svm import SVR  # Support Vector machine for regression
+from sklearn.neural_network import MLPRegressor  # Neural network model
+from sklearn.ensemble import GradientBoostingRegressor  # Boosting model
+from xgboost import XGBRegressor  # Another boosting model (XGBoost)
+
+# Set the style of plots
+sns.set_style("whitegrid")
+plt.rcParams.update({
+    "axes.titlesize": 14,
+    "axes.labelsize": 12,
+    "xtick.labelsize": 10,
+    "ytick.labelsize": 10,
+    "font.family": "sans-serif",
+    "figure.dpi": 100
+})
+
+# Load the data file
+df = pd.read_csv('/content/slope_stability_dataset.csv')  # Read the CSV file
+
+# Show basic info and stats about the data
+df.info()
+df.describe()
+
+# Show charts for all numeric columns
+numeric_cols = df.select_dtypes(include=[np.number]).columns  # Pick only number columns
+for col in numeric_cols:
+    plt.figure(figsize=(8, 4))
+    sns.histplot(df[col], kde=True, bins=30, color="#4C72B0")
+    plt.title(f'Histogram of {col}')
+    plt.xlabel(col)
+    plt.ylabel('Frequency')
+    sns.despine()
+    plt.tight_layout()
+    plt.show()
+
+# Show how many times each reinforcement type appears
+plt.figure(figsize=(8, 4))
+sns.countplot(data=df, x='Reinforcement Type', palette="pastel", edgecolor="black")
+plt.title('Count Plot for Reinforcement Type')
+plt.xlabel('Reinforcement Type')
+plt.ylabel('Count')
+sns.despine()
+plt.tight_layout()
+plt.show()
+
+# Boxplot to check spread of Factor of Safety
+plt.figure(figsize=(8, 4))
+sns.boxplot(y=df['Factor of Safety (FS)'], color="#55A868", width=0.3)
+plt.title('Box Plot of Factor of Safety (FS)')
+plt.ylabel('Factor of Safety (FS)')
+sns.despine()
+plt.tight_layout()
+plt.show()
+
+# Heatmap to see which numbers are related
+numeric_df = df.select_dtypes(include=[np.number])
+plt.figure(figsize=(10, 8))
+corr = numeric_df.corr()
+sns.heatmap(
+    corr,
+    annot=True,
+    fmt='.2f',
+    cmap='crest',
+    square=True,
+    cbar_kws={'shrink': 0.8},
+    linewidths=0.5,
+    linecolor='white'
+)
+plt.title('Correlation Heatmap of Numeric Features')
+sns.despine(left=True, bottom=True)
+plt.tight_layout()
+plt.show()
+
+# Separate input (features) and output (target)
+target_column = 'Factor of Safety (FS)'
+features = df.drop(columns=[target_column])
+
+# Convert the text (Reinforcement Type) into numbers
+features = pd.get_dummies(features, columns=['Reinforcement Type'], drop_first=True)
+
+# Set X (inputs) and y (target)
+X = features
+y = df[target_column]
+
+# Split the data into train (80%) and test (20%)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Define models we want to try
+models = {
+    'Random Forest': RandomForestRegressor(n_estimators=100, random_state=42),
+    'XGBoost': XGBRegressor(n_estimators=100, random_state=42),
+    'Gradient Boosting': GradientBoostingRegressor(n_estimators=100, random_state=42),
+    'SVR': SVR(),
+    'MLP': MLPRegressor(hidden_layer_sizes=(100, 100), max_iter=500)
+}
+
+# Train models and check how good they are
+results = []
+for name, model in models.items():
+    model.fit(X_train, y_train)  # Train
+    y_pred = model.predict(X_test)  # Predict
+    r2 = r2_score(y_test, y_pred)  # Accuracy
+    mae = mean_absolute_error(y_test, y_pred)  # Error
+    results.append((name, r2, mae))
+
+# Save and show the results in a table
+results_df = pd.DataFrame(results, columns=['Model', 'R² Score', 'MAE'])
+
+# Plot model accuracy (R²)
+plt.figure(figsize=(10, 6))
+sns.barplot(data=results_df, x='R² Score', y='Model', palette='Blues_r')
+plt.title('Model Comparison by R² Score')
+plt.xlabel('R² Score')
+plt.ylabel('Model')
+sns.despine()
+plt.tight_layout()
+plt.show()
+
+# Plot model error (MAE)
+plt.figure(figsize=(10, 6))
+sns.barplot(data=results_df, x='MAE', y='Model', palette='Blues_r')
+plt.title('Model Comparison by MAE')
+plt.xlabel('Mean Absolute Error')
+plt.ylabel('Model')
+sns.despine()
+plt.tight_layout()
+plt.show()
+
+# Function to give label: stable, caution, or unstable
+def fs_label(fs):
+    if fs >= 1.5:
+        return 'Stable'
+    elif fs >= 1.2:
+        return 'Caution'
+    else:
+        return 'Unstable'
+
+# Add new column with FS class
+df['FS_Class'] = df['Factor of Safety (FS)'].apply(fs_label)
+
+# Set X and y for classification
+X_cls = features
+y_cls = df['FS_Class']
+X_train_cls, X_test_cls, y_train_cls, y_test_cls = train_test_split(X_cls, y_cls, test_size=0.2, random_state=42)
+
+# Train classification model
+clf = RandomForestClassifier(random_state=42)
+clf.fit(X_train_cls, y_train_cls)
+y_pred_cls = clf.predict(X_test_cls)
+
+# Show how well the classifier did
+print(classification_report(y_test_cls, y_pred_cls))
+
+# Show confusion matrix as a heatmap
+conf_matrix = confusion_matrix(y_test_cls, y_pred_cls)
+plt.figure(figsize=(6, 4))
+sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues', cbar=False)
+plt.title('Confusion Matrix')
+plt.ylabel('True Label')
+plt.xlabel('Predicted Label')
+sns.despine()
+plt.tight_layout()
+plt.show()
+
+# Check which features are most important
+perm_importance = permutation_importance(clf, X_test_cls, y_test_cls, n_repeats=10, random_state=42)
+importances_df = pd.DataFrame({
+    'feature': X_test_cls.columns,
+    'importance': perm_importance.importances_mean
+}).sort_values(by='importance', ascending=True)
+
+# Plot feature importance
+plt.figure(figsize=(10, 6))
+sns.barplot(data=importances_df, x='importance', y='feature', palette='Blues_r')
+plt.title('Permutation Importance of Features')
+plt.xlabel('Mean Permutation Importance')
+plt.ylabel('Feature')
+sns.despine()
+plt.tight_layout()
+plt.show()
